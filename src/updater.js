@@ -6,12 +6,23 @@ const APP_DIR = process.pkg ? path.dirname(process.execPath) : path.resolve(__di
 const LOCAL_VERSION_PATH = path.join(APP_DIR, 'version.json');
 const CONFIG_SALAO_PATH = path.join(APP_DIR, 'config_salao.json');
 
-// Função auxiliar para download HTTPS com timeout
-function downloadTexto(url, timeoutMs = 5000) {
+// Função auxiliar para download HTTPS com timeout e suporte opcional a token
+function downloadTexto(url, timeoutMs = 5000, token = '') {
     return new Promise((resolve, reject) => {
-        const req = https.get(url, { headers: { 'User-Agent': 'BarbeariaBot-Updater' } }, (res) => {
+        const headers = { 
+            'User-Agent': 'BarbeariaBot-Updater' 
+        };
+        if (token) {
+            headers['Authorization'] = `token ${token}`;
+            headers['Accept'] = 'application/vnd.github.v3.raw';
+        }
+
+        const req = https.get(url, { headers }, (res) => {
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                return downloadTexto(res.headers.location, timeoutMs).then(resolve).catch(reject);
+                return downloadTexto(res.headers.location, timeoutMs, token).then(resolve).catch(reject);
+            }
+            if (res.statusCode === 404) {
+                return reject(new Error('404 Not Found (O repositório no GitHub é PRIVADO ou o arquivo não existe)'));
             }
             if (res.statusCode !== 200) {
                 return reject(new Error(`Status HTTP: ${res.statusCode}`));
@@ -64,26 +75,23 @@ async function verificarEAtualizarLayout(forcado = false) {
     // Permite sobrescrever o repo via config_salao.json caso o usuário queira
     let repo = limparRepo(localInfo.githubRepo || 'JonatanGomesF/barbearia-bot');
     let branch = localInfo.branch || 'main';
+    let token = localInfo.githubToken || '';
 
     try {
         if (fs.existsSync(CONFIG_SALAO_PATH)) {
             const extraCfg = JSON.parse(fs.readFileSync(CONFIG_SALAO_PATH, 'utf8'));
             if (extraCfg.githubRepo) repo = limparRepo(extraCfg.githubRepo);
             if (extraCfg.branch) branch = extraCfg.branch;
+            if (extraCfg.githubToken) token = extraCfg.githubToken;
         }
     } catch (e) {}
-
-    // Se o repositório ainda for o exemplo padrão e não for forçado
-    if (!repo || repo === 'jonatan/botsalaorev') {
-        // Tenta checar se existe
-    }
 
     const versionUrl = `https://raw.githubusercontent.com/${repo}/${branch}/version.json?t=${Date.now()}`;
 
     console.log(`🌐 [AUTO-UPDATE] Checando atualizações de layout no GitHub (${repo}@${branch})...`);
 
     try {
-        const remoteVersionRaw = await downloadTexto(versionUrl, 4000);
+        const remoteVersionRaw = await downloadTexto(versionUrl, 5000, token);
         const remoteInfo = JSON.parse(remoteVersionRaw);
 
         if (!remoteInfo || !remoteInfo.version) {
@@ -107,7 +115,7 @@ async function verificarEAtualizarLayout(forcado = false) {
             for (const relPath of files) {
                 try {
                     const fileUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${relPath}?t=${Date.now()}`;
-                    const content = await downloadTexto(fileUrl, 6000);
+                    const content = await downloadTexto(fileUrl, 6000, token);
                     
                     const localTarget = path.join(APP_DIR, relPath);
                     const localTargetDir = path.dirname(localTarget);

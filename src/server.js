@@ -31,7 +31,13 @@ const publicDir = fs.existsSync(path.join(APP_DIR, 'public'))
 // Middlewares
 app.use(cors());
 app.use(express.json());
-app.use(express.static(publicDir));
+app.use(express.static(publicDir, {
+    maxAge: 0,
+    etag: false,
+    setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    }
+}));
 
 // Conecta o emissor de eventos do WhatsApp ao Socket.io
 whatsappManager.setEventEmitter((event, data) => {
