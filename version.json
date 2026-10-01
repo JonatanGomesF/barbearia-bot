@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "githubRepo": "JonatanGomesF/barbearia-bot",
+  "branch": "main",
+  "filesToSync": [
+    "public/index.html",
+    "public/css/style.css",
+    "public/js/app.js"
+  ]
+}

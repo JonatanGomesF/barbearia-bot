@@ -1,0 +1,6 @@
+{
+  "barbeariaId": "barbearia_principal",
+  "githubRepo": "JonatanGomesF/barbearia-bot",
+  "branch": "main",
+  "descricao": "Altere o 'barbeariaId' para cada cliente (ex: barbearia_mika, barbearia_lima). O 'githubRepo' sincroniza layouts e melhorias automaticamente."
+}

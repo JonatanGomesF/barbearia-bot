@@ -1,0 +1,35 @@
+{
+  "name": "botsalaorev",
+  "version": "1.0.0",
+  "description": "Bot de agendamento para salão/barbearia via WhatsApp com Dashboard Web e Prevenção de Conflitos",
+  "main": "chatbot.js",
+  "bin": "chatbot.js",
+  "scripts": {
+    "start": "node chatbot.js",
+    "dev": "node chatbot.js",
+    "build:exe": "node build_exe.js"
+  },
+  "pkg": {
+    "scripts": [
+      "src/**/*.js"
+    ],
+    "assets": [
+      "public/**/*"
+    ],
+    "outputPath": "dist"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "puppeteer": "^24.10.2",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "socket.io": "^4.8.1",
+    "whatsapp-web.js": "^1.34.1"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.23.0",
+    "javascript-obfuscator": "^5.8.0"
+  }
+}

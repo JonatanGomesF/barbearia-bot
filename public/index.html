@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbearia Bot &mdash; Painel de Agendamentos & WhatsApp Hub</title>
+    <meta name="description" content="Sistema inteligente de agendamentos para salão e barbearia via WhatsApp com sincronização de QR Code em tempo real e prevenção ativa de colisões.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <!-- Background glow ambient effects -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-logo">
+                    <div class="logo-icon">💈</div>
+                    <div class="brand-info">
+                        <h2 id="sidebar-salon-name">Barbearia do Mika</h2>
+                        <span class="badge-pro">WhatsApp Bot PRO</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bot Status Mini Card -->
+            <div class="sidebar-status-card" id="sidebar-status-card">
+                <div class="status-indicator-wrapper">
+                    <span class="status-pulse-dot" id="status-pulse"></span>
+                    <span class="status-text" id="sidebar-status-text">Conectando...</span>
+                </div>
+                <div class="status-subtext" id="sidebar-status-subtext">Aguardando inicialização</div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-btn active" data-tab="tab-qrcode" id="nav-qrcode">
+                    <i data-lucide="qr-code"></i>
+                    <span>Conexão WhatsApp</span>
+                    <span class="nav-badge" id="qr-nav-badge">QR</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-calendar" id="nav-calendar">
+                    <i data-lucide="calendar"></i>
+                    <span>Agenda & Horários</span>
+                    <span class="nav-badge count" id="today-count-badge">0</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-appointments" id="nav-appointments">
+                    <i data-lucide="list-checks"></i>
+                    <span>Todos Agendamentos</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-simulator" id="nav-simulator">
+                    <i data-lucide="message-square"></i>
+                    <span>Simulador & Logs</span>
+                    <span class="nav-badge live">LIVE</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-settings" id="nav-settings">
+                    <i data-lucide="sliders"></i>
+                    <span>Serviços & Config</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="anti-conflict-badge">
+                    <i data-lucide="shield-check"></i>
+                    <div>
+                        <strong>Anti-Conflito Ativo</strong>
+                        <small>Zero sobreposição de horários</small>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top App Bar -->
+            <header class="topbar">
+                <div class="topbar-title">
+                    <h1 id="page-title">Conexão WhatsApp & QR Code</h1>
+                    <p id="page-subtitle">Escaneie o código para autenticar o bot de atendimento e agendamento</p>
+                </div>
+
+                <div class="topbar-actions">
+                    <div class="live-clock" id="live-clock">--:--:--</div>
+                    <button class="btn btn-secondary btn-icon" id="btn-refresh-all" title="Atualizar dados">
+                        <i data-lucide="refresh-cw"></i>
+                    </button>
+                    <button class="btn btn-primary" id="btn-modal-novo-agendamento">
+                        <i data-lucide="plus"></i>
+                        <span>Novo Agendamento</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Metrics Summary Cards -->
+            <section class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-icon gold">
+                        <i data-lucide="calendar-check"></i>
+                    </div>
+                    <div class="metric-data">
+                        <span class="metric-label">Agendamentos Hoje</span>
+                        <h3 class="metric-value" id="stat-hoje">0</h3>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon blue">
+                        <i data-lucide="clock"></i>
+                    </div>
+                    <div class="metric-data">
+                        <span class="metric-label">Vagas Livres Hoje</span>
+                        <h3 class="metric-value" id="stat-livres">0</h3>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon green">
+                        <i data-lucide="check-circle-2"></i>
+                    </div>
+                    <div class="metric-data">
+                        <span class="metric-label">Confirmados Total</span>
+                        <h3 class="metric-value" id="stat-total">0</h3>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon amber">
+                        <i data-lucide="dollar-sign"></i>
+                    </div>
+                    <div class="metric-data">
+                        <span class="metric-label">Faturamento Estimado</span>
+                        <h3 class="metric-value" id="stat-faturamento">R$ 0,00</h3>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 1: QR CODE & CONEXÃO WHATSAPP -->
+            <section class="tab-content active" id="tab-qrcode">
+                <div class="qrcode-view-grid">
+                    <!-- QR Code Card -->
+                    <div class="glass-card qrcode-main-card">
+                        <div class="card-header">
+                            <div class="header-icon"><i data-lucide="smartphone"></i></div>
+                            <div>
+                                <h2>Conexão em Tempo Real</h2>
+                                <p>Sincronização automática com seu WhatsApp</p>
+                            </div>
+                            <div class="connection-status-pill" id="qr-status-pill">
+                                <span class="pill-dot"></span>
+                                <span class="pill-text">Aguardando QR</span>
+                            </div>
+                        </div>
+
+                        <!-- QR State: WAITING_QR -->
+                        <div class="qr-display-container" id="qr-container-waiting">
+                            <div class="qr-canvas-box" id="qr-canvas-box">
+                                <div class="qr-scanner-line" id="qr-scanner-line"></div>
+                                <img id="qr-image" src="" alt="WhatsApp QR Code" class="qr-img hidden">
+                                <div class="qr-loader" id="qr-loader">
+                                    <div class="spinner"></div>
+                                    <p>Gerando QR Code do WhatsApp...</p>
+                                </div>
+                            </div>
+                            <div class="qr-timer-bar">
+                                <div class="qr-timer-progress" id="qr-progress"></div>
+                            </div>
+                            <p class="qr-caption">O QR Code é atualizado dinamicamente pelo bot.</p>
+                        </div>
+
+                        <!-- QR State: CONNECTED -->
+                        <div class="qr-connected-card hidden" id="qr-container-connected">
+                            <div class="connected-badge-icon">
+                                <i data-lucide="shield-check"></i>
+                            </div>
+                            <h3>WhatsApp Conectado com Sucesso!</h3>
+                            <p>O bot está ativo e respondendo aos clientes automaticamente.</p>
+
+                            <div class="connected-details-box">
+                                <div class="detail-item">
+                                    <span class="label">Perfil Conectado:</span>
+                                    <strong id="user-pushname">Barbearia</strong>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="label">Número do WhatsApp:</span>
+                                    <strong id="user-phone">--</strong>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="label">Plataforma:</span>
+                                    <strong id="user-platform">WhatsApp Web</strong>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="label">Status do Atendimento:</span>
+                                    <span class="badge-status online">🟢 Online & Respondendo</span>
+                                </div>
+                            </div>
+
+                            <div class="connected-actions">
+                                <button class="btn btn-outline" id="btn-restart-bot">
+                                    <i data-lucide="rotate-cw"></i> Reiniciar Conexão
+                                </button>
+                                <button class="btn btn-danger-outline" id="btn-logout-bot">
+                                    <i data-lucide="log-out"></i> Desconectar Sessão
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Action controls -->
+                        <div class="card-footer-actions">
+                            <button class="btn btn-secondary" id="btn-manual-refresh-qr">
+                                <i data-lucide="refresh-cw"></i> Recarregar QR Code
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step-by-Step Tutorial & Safety Info -->
+                    <div class="qrcode-side-panel">
+                        <div class="glass-card instructions-card">
+                            <h3><i data-lucide="help-circle"></i> Como Conectar em 4 Passos</h3>
+                            <ol class="step-list">
+                                <li>
+                                    <div class="step-num">1</div>
+                                    <div class="step-desc">
+                                        <strong>Abra o WhatsApp</strong>
+                                        <p>Abra o app do WhatsApp no seu smartphone.</p>
+                                    </div>
+                                </li>
+                                <li>
+                                    <div class="step-num">2</div>
+                                    <div class="step-desc">
+                                        <strong>Acesse Aparelhos Conectados</strong>
+                                        <p>No Android: Menu (⋮) &gt; Aparelhos conectados.<br>No iPhone: Ajustes (⚙️) &gt; Aparelhos conectados.</p>
+                                    </div>
+                                </li>
+                                <li>
+                                    <div class="step-num">3</div>
+                                    <div class="step-desc">
+                                        <strong>Conectar um Aparelho</strong>
+                                        <p>Toque no botão "Conectar um aparelho" e confirme biometria.</p>
+                                    </div>
+                                </li>
+                                <li>
+                                    <div class="step-num">4</div>
+                                    <div class="step-desc">
+                                        <strong>Aponte a Câmera</strong>
+                                        <p>Aponte a câmera para o QR Code ao lado para sincronizar.</p>
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+
+                        <div class="glass-card collision-card">
+                            <div class="shield-header">
+                                <i data-lucide="lock"></i>
+                                <h4>Sistema Anti-Colisão em Tempo Real</h4>
+                            </div>
+                            <p>Quando um cliente escolhe um horário pelo WhatsApp (ex: <em>Segunda às 10h</em>), o sistema <strong>bloqueia imediatamente</strong> o horário no banco de dados.</p>
+                            <p class="highlight-text">🛡️ Se outro cliente tentar selecionar o mesmo horário ao mesmo tempo, o bot avisa instantaneamente e oferece apenas os horários livres restantes.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: AGENDA & CALENDÁRIO INTERATIVO -->
+            <section class="tab-content" id="tab-calendar">
+                <div class="calendar-header-bar">
+                    <div class="date-navigator">
+                        <button class="btn btn-secondary btn-icon" id="btn-prev-day"><i data-lucide="chevron-left"></i></button>
+                        <div class="current-date-display">
+                            <h2 id="calendar-selected-date-label">Hoje, Segunda-feira</h2>
+                            <span id="calendar-selected-date-sub">05 de Outubro de 2026</span>
+                        </div>
+                        <button class="btn btn-secondary btn-icon" id="btn-next-day"><i data-lucide="chevron-right"></i></button>
+                    </div>
+
+                    <div class="quick-days-pills" id="quick-days-container">
+                        <!-- Dynamic week day pills rendered via JS -->
+                    </div>
+
+                    <div class="calendar-legend">
+                        <span class="legend-item"><span class="dot available"></span> Livre</span>
+                        <span class="legend-item"><span class="dot occupied"></span> Agendado (WhatsApp / Balcão)</span>
+                        <span class="legend-item"><span class="dot locked"></span> Conflito Bloqueado</span>
+                    </div>
+                </div>
+
+                <!-- Closed Today Banner -->
+                <div id="calendar-closed-alert" class="calendar-closed-banner hidden">
+                    <div class="closed-banner-content">
+                        <div class="closed-banner-icon"><i data-lucide="alert-octagon"></i></div>
+                        <div>
+                            <h4>🛑 SALÃO FECHADO HOJE</h4>
+                            <p id="calendar-closed-reason">Atendimento presencial pausado pelo administrador para a data de hoje. Clientes no WhatsApp estão sendo orientados a agendar para os próximos dias.</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" id="btn-quick-reopen">Reabrir Salão</button>
+                </div>
+
+                <!-- Slots Grid (09:00 - 21:00) -->
+                <div class="slots-grid-container" id="slots-grid-container">
+                    <!-- Dynamic slots cards -->
+                </div>
+            </section>
+
+            <!-- TAB 3: TODOS OS AGENDAMENTOS -->
+            <section class="tab-content" id="tab-appointments">
+                <div class="glass-card table-card">
+                    <div class="table-toolbar">
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="search-appointments" placeholder="Buscar por cliente, telefone ou serviço...">
+                        </div>
+                        <div class="filter-group">
+                            <select id="filter-status" class="form-select">
+                                <option value="">Todos os Status</option>
+                                <option value="confirmado">Confirmados</option>
+                                <option value="concluido">Concluídos</option>
+                                <option value="cancelado">Cancelados</option>
+                            </select>
+                            <input type="date" id="filter-date" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Horário / Data</th>
+                                    <th>Cliente</th>
+                                    <th>WhatsApp / Contato</th>
+                                    <th>Serviço</th>
+                                    <th>Valor</th>
+                                    <th>Origem</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="appointments-table-body">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: SIMULADOR & LIVE LOGS -->
+            <section class="tab-content" id="tab-simulator">
+                <div class="simulator-layout">
+                    <!-- Phone simulator frame -->
+                    <div class="phone-mockup">
+                        <div class="phone-notch"></div>
+                        <div class="phone-screen">
+                            <div class="whatsapp-chat-header">
+                                <div class="chat-avatar">💈</div>
+                                <div class="chat-info">
+                                    <strong id="sim-barber-title">Barbearia do Mika</strong>
+                                    <span class="chat-status">online (Bot Ativo)</span>
+                                </div>
+                            </div>
+                            <div class="whatsapp-messages-body" id="sim-messages-body">
+                                <div class="chat-bubble incoming">
+                                    <div class="bubble-text">
+                                        💈 <strong>BEM-VINDO À BARBEARIA DO MIKA</strong><br><br>
+                                        Olá! Como podemos cuidar do seu visual hoje?<br><br>
+                                        1️⃣ <strong>Agendar Horário</strong> 📅<br>
+                                        2️⃣ <strong>Ver Meus Agendamentos / Cancelar</strong> 📋<br>
+                                        3️⃣ <strong>Tabela de Serviços & Preços</strong> 💈<br>
+                                        4️⃣ <strong>Endereço & Horários</strong> 📍<br><br>
+                                        <em>Envie 1 para agendar!</em>
+                                    </div>
+                                    <span class="bubble-time">10:00</span>
+                                </div>
+                            </div>
+                            <div class="whatsapp-input-bar">
+                                <input type="text" id="sim-input" placeholder="Digite uma mensagem (ex: 1, 2, cancelar)..." autocomplete="off">
+                                <button id="btn-sim-send"><i data-lucide="send"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live bot event logs stream -->
+                    <div class="glass-card live-logs-card">
+                        <div class="card-header">
+                            <div class="header-icon"><i data-lucide="terminal"></i></div>
+                            <div>
+                                <h2>Monitor de Eventos em Tempo Real</h2>
+                                <p>Registro instantâneo de mensagens recebidas, respostas e bloqueios</p>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" id="btn-clear-logs">Limpar</button>
+                        </div>
+                        <div class="logs-console" id="logs-console">
+                            <div class="log-entry system">
+                                <span class="log-time">[Sistema]</span>
+                                <span class="log-text">Monitor de agendamentos e proteção anti-conflito inicializado.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: CONFIGURAÇÕES & SERVIÇOS -->
+            <section class="tab-content" id="tab-settings">
+                <div class="settings-grid">
+                    <!-- CARD 1: CONTROLE DE FUNCIONAMENTO (HOJE ESTAMOS FECHADOS) -->
+                    <div class="glass-card card-highlight-closed" id="card-status-funcionamento">
+                        <div class="card-header">
+                            <div class="header-icon" id="icon-status-funcionamento"><i data-lucide="power"></i></div>
+                            <div>
+                                <h2>Status de Funcionamento Hoje</h2>
+                                <p>Controle emergencial de abertura e fechamento do salão</p>
+                            </div>
+                            <div class="closed-status-pill open" id="badge-status-fechado">
+                                <span class="pill-dot"></span>
+                                <span class="pill-text" id="txt-badge-status-fechado">🟢 Salão Aberto Hoje</span>
+                            </div>
+                        </div>
+                        <div class="closed-control-body">
+                            <p class="closed-desc">
+                                Ative o modo <strong>"Hoje Estamos Fechados"</strong> para suspender instantaneamente as vagas de hoje no bot do WhatsApp e no painel. O bot continuará aceitando agendamentos normalmente para os próximos dias!
+                            </p>
+
+                            <div class="form-group" style="margin-top: 14px;">
+                                <label for="cfg-motivo-fechado">Motivo / Aviso aos Clientes (Exibido no WhatsApp)</label>
+                                <input type="text" id="cfg-motivo-fechado" class="form-input" placeholder="Ex: Feriado municipal / Manutenção do espaço / Folga da equipe">
+                            </div>
+
+                            <div class="closed-action-row">
+                                <button type="button" class="btn btn-danger-solid" id="btn-toggle-fechado-hoje">
+                                    <i data-lucide="alert-octagon"></i>
+                                    <span id="txt-btn-toggle-fechado">🛑 Ativar Modo: HOJE ESTAMOS FECHADOS</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CARD 2: CONFIGURAÇÃO DE VAGAS & HORÁRIOS BASE -->
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <div class="header-icon"><i data-lucide="clock"></i></div>
+                            <div>
+                                <h2>Horários de Atendimento & Vagas</h2>
+                                <p>Defina o número de vagas diárias e os horários disponíveis</p>
+                            </div>
+                            <span class="badge-vagas-count" id="vagas-count-badge">12 Vagas Diárias</span>
+                        </div>
+                        <div class="form-body">
+                            <!-- Presets rápidos -->
+                            <div class="slots-presets-row">
+                                <span class="preset-label">⚡ Predefinições Rápidas:</span>
+                                <div class="preset-btns">
+                                    <button type="button" class="btn btn-secondary btn-xs" id="preset-12-vagas">12 Vagas (09h-21h)</button>
+                                    <button type="button" class="btn btn-secondary btn-xs" id="preset-8-vagas">8 Vagas (09h-18h)</button>
+                                    <button type="button" class="btn btn-secondary btn-xs" id="preset-15-vagas">15 Vagas (08h-22h)</button>
+                                    <button type="button" class="btn btn-secondary btn-xs" id="preset-30min">Intervalo 30 min</button>
+                                </div>
+                            </div>
+
+                            <!-- Adicionar Novo Horário -->
+                            <div class="add-slot-row">
+                                <div class="form-group" style="margin: 0; flex: 1;">
+                                    <label for="input-new-time">Adicionar Novo Horário de Atendimento</label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="time" id="input-new-time" class="form-input" value="08:00" style="max-width: 160px;">
+                                        <button type="button" class="btn btn-secondary" id="btn-add-slot-time">
+                                            <i data-lucide="plus"></i> Adicionar Horário
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Grade de Chips de Horários / Vagas Editáveis -->
+                            <label style="margin-top: 16px; display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">
+                                Horários Ativos (<span id="slots-count-number">12</span> vagas configuradas):
+                            </label>
+                            <div class="slots-chips-grid" id="slots-chips-container">
+                                <!-- Dynamic time chips -->
+                            </div>
+
+                            <!-- Dias de Funcionamento -->
+                            <div class="working-days-box" style="margin-top: 18px;">
+                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">
+                                    📅 Dias de Funcionamento na Semana:
+                                </label>
+                                <div class="working-days-checkboxes" id="working-days-container">
+                                    <label class="day-checkbox"><input type="checkbox" data-day="1" checked> Seg</label>
+                                    <label class="day-checkbox"><input type="checkbox" data-day="2" checked> Ter</label>
+                                    <label class="day-checkbox"><input type="checkbox" data-day="3" checked> Qua</label>
+                                    <label class="day-checkbox"><input type="checkbox" data-day="4" checked> Qui</label>
+                                    <label class="day-checkbox"><input type="checkbox" data-day="5" checked> Sex</label>
+                                    <label class="day-checkbox"><input type="checkbox" data-day="6" checked> Sáb</label>
+                                    <label class="day-checkbox"><input type="checkbox" data-day="0"> Dom</label>
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn btn-primary" id="btn-save-slots" style="margin-top: 20px;">
+                                <i data-lucide="save"></i> Salvar Horários & Vagas Diárias
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CARD 3: Informações da Barbearia -->
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <div class="header-icon"><i data-lucide="store"></i></div>
+                            <div>
+                                <h2>Informações da Barbearia</h2>
+                                <p>Dados que o bot envia aos clientes</p>
+                            </div>
+                        </div>
+                        <form id="form-config-geral" class="form-body">
+                            <div class="form-group">
+                                <label for="cfg-nome">Nome da Barbearia / Salão</label>
+                                <input type="text" id="cfg-nome" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="cfg-dono">WhatsApp do Dono / Barbeiro (com DDI e DDD)</label>
+                                <input type="text" id="cfg-dono" class="form-input" placeholder="5515974062762" required>
+                                <small>Receberá alertas instantâneos a cada novo agendamento e cancelamento.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="cfg-endereco">Endereço Completo</label>
+                                <input type="text" id="cfg-endereco" class="form-input" placeholder="Rua Exemplo, 123 - Centro">
+                            </div>
+                            <div class="form-group">
+                                <label for="cfg-pix">Chave PIX para Pagamento</label>
+                                <input type="text" id="cfg-pix" class="form-input" placeholder="Telefone / CPF / CNPJ / Aleatória">
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i data-lucide="save"></i> Salvar Informações
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- CARD 4: Gestão de Serviços & Preços -->
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <div class="header-icon"><i data-lucide="scissors"></i></div>
+                            <div>
+                                <h2>Serviços & Tabela de Preços</h2>
+                                <p>Serviços disponíveis para agendamento no bot</p>
+                            </div>
+                        </div>
+                        <div class="services-list" id="services-list-container">
+                            <!-- Dynamic services list -->
+                        </div>
+                        <button class="btn btn-secondary" id="btn-add-service" style="margin-top: 16px;">
+                            <i data-lucide="plus-circle"></i> Adicionar Novo Serviço
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL: NOVO AGENDAMENTO MANUAL -->
+    <div class="modal-overlay hidden" id="modal-agendamento">
+        <div class="glass-card modal-box">
+            <div class="modal-header">
+                <h3><i data-lucide="plus-circle"></i> Novo Agendamento</h3>
+                <button class="modal-close" id="btn-close-modal">&times;</button>
+            </div>
+            <form id="form-novo-agendamento" class="form-body">
+                <div class="form-group">
+                    <label for="modal-cliente">Nome do Cliente</label>
+                    <input type="text" id="modal-cliente" class="form-input" placeholder="Ex: Roberto Silva" required>
+                </div>
+                <div class="form-group">
+                    <label for="modal-telefone">Telefone / WhatsApp</label>
+                    <input type="text" id="modal-telefone" class="form-input" placeholder="15999999999">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modal-data">Data</label>
+                        <input type="date" id="modal-data" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-horario">Horário Disponível</label>
+                        <select id="modal-horario" class="form-select" required>
+                            <option value="">Selecione uma data primeiro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="modal-servico">Serviço</label>
+                    <select id="modal-servico" class="form-select" required>
+                        <!-- Dynamic options -->
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btn-confirm-booking">Confirmar Agendamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/js/app.js"></script>
+</body>
+</html>
