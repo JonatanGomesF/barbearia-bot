@@ -206,14 +206,28 @@ class WhatsAppManager {
             this.emit('status_change', statusObj);
         });
 
-        // Evento de Desconexão
-        this.client.on('disconnected', (reason) => {
+        // Evento de Desconexão Automática (celular ou painel)
+        this.client.on('disconnected', async (reason) => {
+            console.log("⚠️ [WHATSAPP DESCONECTADO] Motivo:", reason);
             this.status = 'DISCONNECTED';
             this.userInfo = null;
             this.currentQr = null;
             this.currentQrImage = null;
-            console.log("⚠️ WhatsApp desconectado:", reason);
-            this.emit('status_change', { status: this.status, reason });
+            this.emit('status_change', { 
+                status: 'DISCONNECTED', 
+                reason, 
+                message: 'WhatsApp desconectado. Gerando novo QR Code...' 
+            });
+
+            // Aguarda liberação dos arquivos do Chrome e reinicia para gerar novo QR Code
+            setTimeout(async () => {
+                try {
+                    console.log("🔄 [RECONEXÃO AUTOMÁTICA] Inicializando novo leitor de QR Code...");
+                    await this.restart();
+                } catch (err) {
+                    console.error("Erro ao reiniciar cliente após desconexão:", err.message);
+                }
+            }, 2500);
         });
 
         // Handler central para qualquer mensagem (clientes externos e mensagens de teste do próprio número)
@@ -338,19 +352,39 @@ class WhatsAppManager {
 
     async restart() {
         console.log("🔄 Reiniciando cliente WhatsApp...");
+        try {
+            if (this.client) {
+                await this.client.destroy().catch(() => {});
+                this.client = null;
+            }
+        } catch (e) {}
+
+        await new Promise(r => setTimeout(r, 1200));
         await this.initialize();
     }
 
     async logout() {
         try {
-            if (this.client) {
-                await this.client.logout();
-            }
             this.status = 'DISCONNECTED';
             this.userInfo = null;
             this.currentQr = null;
             this.currentQrImage = null;
-            this.emit('status_change', { status: this.status, message: 'Desconectado com sucesso' });
+            this.emit('status_change', { status: this.status, message: 'Desconectando sessão...' });
+
+            if (this.client) {
+                try {
+                    await this.client.logout().catch(() => {});
+                } catch (e) {}
+                try {
+                    await this.client.destroy().catch(() => {});
+                } catch (e) {}
+                this.client = null;
+            }
+
+            setTimeout(async () => {
+                await this.initialize();
+            }, 2000);
+
             return { success: true };
         } catch (error) {
             return { success: false, error: error.message };

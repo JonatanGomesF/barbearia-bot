@@ -21,6 +21,15 @@ process.on('uncaughtException', function (err) {
 });
 
 process.on('unhandledRejection', function (reason) {
+    const msg = reason ? (reason.message || String(reason)) : '';
+    // Ignora erros normais de ciclo de vida do Puppeteer ao desconectar/navegar
+    if (msg.includes('Execution context was destroyed') || 
+        msg.includes('EBUSY') || 
+        msg.includes('Target closed') || 
+        msg.includes('Session closed') ||
+        msg.includes('Protocol error')) {
+        return;
+    }
     console.error('\n⚠️ [REJEIÇÃO NÃO TRATADA]:', reason);
     registrarErro('UNHANDLED_REJECTION', reason);
 });
